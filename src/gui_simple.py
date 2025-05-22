@@ -37,6 +37,8 @@ class DebuggerGUI:
         self.flash_thread = None
         self.selection_mode = False
         self.current_content = ""
+        self.is_paused = False  # Estado de pausa para congelar la actualización de logs
+        self.pause_button = None  # Referencia al botón de pausa
         # Expresión regular para detectar bloques (líneas que comienzan con corchetes)
         self.block_pattern = re.compile(r'^\[.*?\]', re.MULTILINE)
 
@@ -185,6 +187,12 @@ class DebuggerGUI:
                       command=self.clear_content).pack(side=tk.LEFT, padx=5)
             ttk.Button(button_frame, text="Recargar",
                       command=self.reload_content).pack(side=tk.LEFT, padx=5)
+
+            # Botón de pausa/reanudar
+            self.pause_button = ttk.Button(button_frame, text="Pausar",
+                                         command=self.toggle_pause)
+            self.pause_button.pack(side=tk.LEFT, padx=5)
+
             ttk.Button(button_frame, text="Excepciones",
                       command=self.show_exceptions_manager).pack(side=tk.LEFT, padx=5)
             ttk.Button(button_frame, text="Config. Logs Consola",
@@ -248,6 +256,12 @@ class DebuggerGUI:
         # Imprimir información de diagnóstico
         print(f"Actualizando contenido. Tamaño: {len(content)} bytes")
 
+        # Si está en pausa, no actualizar la interfaz pero guardar el contenido
+        if self.is_paused:
+            print("Actualización pausada. El contenido se mostrará al reanudar.")
+            self.current_content = content
+            return
+
         # Guardar el contenido actual
         self.current_content = content
 
@@ -301,6 +315,11 @@ class DebuggerGUI:
         """Actualizar los bloques de log en la interfaz (modo selección)"""
         if not self.is_window_open:
             self.create_window()
+
+        # Si está en pausa, no actualizar la interfaz
+        if self.is_paused:
+            print("Actualización de bloques pausada. Los bloques se mostrarán al reanudar.")
+            return
 
         # Guardar los bloques
         self.blocks = blocks
@@ -390,6 +409,30 @@ class DebuggerGUI:
         if self.on_reload_content:
             self.on_reload_content()
 
+    def toggle_pause(self):
+        """Alternar entre pausa y reanudar la actualización de logs"""
+        self.is_paused = not self.is_paused
+
+        # Actualizar el texto del botón
+        if self.pause_button:
+            self.pause_button.config(text="Reanudar" if self.is_paused else "Pausar")
+
+            # Cambiar el color del botón según el estado
+            if self.is_paused:
+                self.pause_button.config(background="#E5B80B")  # Amarillo para pausa
+            else:
+                self.pause_button.config(background=None)  # Color por defecto
+
+        # Actualizar el título de la ventana
+        if self.root:
+            if self.is_paused:
+                self.root.title(f"{self.original_title} [PAUSADO]")
+            else:
+                self.root.title(self.original_title)
+                # Al reanudar, recargar el contenido para mostrar los cambios acumulados
+                if self.on_reload_content:
+                    self.on_reload_content()
+
     def flash_title(self):
         """Hacer que el título de la ventana parpadee para indicar nuevos logs"""
         if not self.root or self.is_flashing:
@@ -401,15 +444,26 @@ class DebuggerGUI:
             flash_count = 0
             while flash_count < 6 and self.is_flashing:  # Parpadear 3 veces (6 cambios)
                 if flash_count % 2 == 0:
-                    self.root.title("¡NUEVO LOG! - " + self.original_title)
+                    # Si está pausado, incluir [PAUSADO] en el título
+                    if self.is_paused:
+                        self.root.title("¡NUEVO LOG! - " + self.original_title + " [PAUSADO]")
+                    else:
+                        self.root.title("¡NUEVO LOG! - " + self.original_title)
                 else:
-                    self.root.title(self.original_title)
+                    # Restaurar el título adecuado según el estado de pausa
+                    if self.is_paused:
+                        self.root.title(self.original_title + " [PAUSADO]")
+                    else:
+                        self.root.title(self.original_title)
                 flash_count += 1
                 time.sleep(0.5)
 
-            # Restaurar el título original
+            # Restaurar el título original con el estado de pausa si corresponde
             if self.root:
-                self.root.title(self.original_title)
+                if self.is_paused:
+                    self.root.title(self.original_title + " [PAUSADO]")
+                else:
+                    self.root.title(self.original_title)
             self.is_flashing = False
 
         # Iniciar el parpadeo en un hilo separado
