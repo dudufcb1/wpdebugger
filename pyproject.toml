@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wpdebugger"
+version = "1.0.0"
+description = "Herramienta para monitorear logs de depuración de WordPress en tiempo real"
+readme = "README.md"
+authors = [
+    {name = "Luis Eduardo G. González", email = "contacto@devactivo.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Debuggers",
+]
+keywords = ["wordpress", "debug", "log", "monitor", "viewer"]
+dependencies = [
+    "customtkinter>=5.2.0",
+    "watchdog>=2.1.0",
+    "pyperclip>=1.8.0",
+]
+requires-python = ">=3.6"
+
+[project.urls]
+"Homepage" = "https://devactivo.com"
+"Bug Tracker" = "https://github.com/username/wpdebugger/issues"
+
+[project.scripts]
+wpdebugger = "wpdebugger:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.ico"]
