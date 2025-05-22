@@ -12,6 +12,11 @@ Una aplicación para monitorear y visualizar los logs de depuración de WordPres
 - Combinación de logs de consola del navegador con logs de WordPress
 - Resaltado del último mensaje recibido
 - Notificaciones visuales mediante parpadeo del título
+- Búsqueda de texto en los logs con atajos de teclado:
+  - Ctrl+F: Abrir/cerrar búsqueda
+  - F3: Buscar siguiente coincidencia
+  - Shift+F3: Buscar coincidencia anterior
+  - Esc: Cerrar búsqueda
 
 ## Requisitos
 

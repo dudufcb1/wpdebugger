@@ -11,8 +11,8 @@ if current_dir not in sys.path:
     sys.path.append(current_dir)
 
 # Importar módulos locales
-from src.config import Config
-from src.gui_simple import DebuggerGUI
+from config import Config
+from gui_simple import DebuggerGUI
 
 class DebugLogHandler(FileSystemEventHandler):
     def __init__(self, debug_log_path, gui, config):

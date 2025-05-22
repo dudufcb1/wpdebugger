@@ -39,6 +39,14 @@ class DebuggerGUI:
         self.current_content = ""
         self.is_paused = False  # Estado de pausa para congelar la actualización de logs
         self.pause_button = None  # Referencia al botón de pausa
+
+        # Variables para la búsqueda
+        self.search_frame = None
+        self.search_entry = None
+        self.search_results_label = None
+        self.search_matches = []
+        self.current_match_index = -1
+        self.is_search_visible = False
         # Expresión regular para detectar bloques (líneas que comienzan con corchetes)
         self.block_pattern = re.compile(r'^\[.*?\]', re.MULTILINE)
 
@@ -125,6 +133,22 @@ class DebuggerGUI:
                                       bg="#f8f9fa", fg="#333333",
                                       font=("Consolas", 10))
             self.text_widget.pack(fill=tk.BOTH, expand=True)
+
+            # Configurar atajos de teclado para búsqueda
+            self.root.bind("<Control-f>", self.toggle_search)
+            self.text_widget.bind("<Control-f>", self.toggle_search)
+
+            # F3 para buscar siguiente
+            self.root.bind("<F3>", self.search_next)
+            self.text_widget.bind("<F3>", self.search_next)
+
+            # Shift+F3 para buscar anterior
+            self.root.bind("<Shift-F3>", self.search_previous)
+            self.text_widget.bind("<Shift-F3>", self.search_previous)
+
+            # Escape para cerrar la búsqueda
+            self.root.bind("<Escape>", lambda e: self.hide_search())
+            self.text_widget.bind("<Escape>", lambda e: self.hide_search())
 
             # Barra de scroll para el área de texto
             text_scrollbar = ttk.Scrollbar(normal_tab, orient=tk.VERTICAL, command=self.text_widget.yview)
@@ -793,6 +817,224 @@ class DebuggerGUI:
             os.system(f'explorer "{folder_path}"')
         except Exception as e:
             messagebox.showerror("Error", f"Error al abrir la carpeta: {str(e)}")
+
+    def toggle_search(self, event=None):
+        """Mostrar u ocultar el panel de búsqueda"""
+        if self.is_search_visible:
+            self.hide_search()
+        else:
+            self.show_search()
+        return "break"  # Evitar que el evento se propague
+
+    def show_search(self):
+        """Mostrar el panel de búsqueda"""
+        if not self.is_window_open or not self.text_widget:
+            return
+
+        if not self.search_frame:
+            # Crear el frame de búsqueda
+            self.search_frame = ttk.Frame(self.root)
+            self.search_frame.place(relx=1.0, y=10, anchor="ne", relwidth=0.3, height=40)
+
+            # Campo de entrada para la búsqueda
+            self.search_entry = ttk.Entry(self.search_frame)
+            self.search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 5), pady=5)
+            self.search_entry.bind("<Return>", self.search_next)
+            self.search_entry.bind("<KP_Enter>", self.search_next)
+
+            # Buscar mientras se escribe
+            self.search_entry.bind("<KeyRelease>", self.search_text)
+
+            # Botones de navegación
+            nav_frame = ttk.Frame(self.search_frame)
+            nav_frame.pack(side=tk.LEFT, padx=5, pady=5)
+
+            # Botón para buscar hacia arriba
+            up_button = ttk.Button(nav_frame, text="▲", width=3, command=self.search_previous)
+            up_button.pack(side=tk.LEFT, padx=2)
+
+            # Botón para buscar hacia abajo
+            down_button = ttk.Button(nav_frame, text="▼", width=3, command=self.search_next)
+            down_button.pack(side=tk.LEFT, padx=2)
+
+            # Botón para cerrar la búsqueda
+            close_button = ttk.Button(self.search_frame, text="✕", width=3, command=self.hide_search)
+            close_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+            # Etiqueta para mostrar resultados
+            self.search_results_label = ttk.Label(self.search_frame, text="")
+            self.search_results_label.pack(side=tk.LEFT, padx=5, pady=5)
+        else:
+            self.search_frame.place(relx=1.0, y=10, anchor="ne", relwidth=0.3, height=40)
+
+        self.is_search_visible = True
+
+        # Asegurar que el campo de búsqueda reciba el foco
+        self.root.after(100, self.search_entry.focus_set)
+
+        # También seleccionar todo el texto si hay alguno
+        if self.search_entry.get():
+            self.search_entry.after(150, lambda: self.search_entry.select_range(0, tk.END))
+
+        # Si hay texto seleccionado, usarlo como término de búsqueda
+        try:
+            selected_text = self.text_widget.get(tk.SEL_FIRST, tk.SEL_LAST)
+            if selected_text:
+                self.search_entry.delete(0, tk.END)
+                self.search_entry.insert(0, selected_text)
+                self.search_entry.select_range(0, tk.END)
+        except tk.TclError:
+            pass  # No hay texto seleccionado
+
+    def hide_search(self):
+        """Ocultar el panel de búsqueda"""
+        if self.search_frame:
+            self.search_frame.place_forget()
+
+            # Eliminar resaltados de búsqueda
+            if self.text_widget:
+                self.text_widget.tag_remove("search", "1.0", tk.END)
+                self.text_widget.tag_remove("current_match", "1.0", tk.END)
+
+        self.is_search_visible = False
+        self.search_matches = []
+        self.current_match_index = -1
+
+    def find_all_matches(self, search_term):
+        """Encontrar todas las coincidencias del término de búsqueda en el texto"""
+        if not search_term or not self.text_widget:
+            return []
+
+        matches = []
+        start_pos = "1.0"
+
+        while True:
+            # Buscar la siguiente coincidencia
+            pos = self.text_widget.search(search_term, start_pos, tk.END, nocase=True)
+            if not pos:
+                break
+
+            # Calcular la posición final de la coincidencia
+            end_pos = f"{pos}+{len(search_term)}c"
+
+            # Añadir a la lista de coincidencias
+            matches.append((pos, end_pos))
+
+            # Actualizar la posición de inicio para la siguiente búsqueda
+            start_pos = end_pos
+
+        return matches
+
+    def highlight_matches(self, matches):
+        """Resaltar todas las coincidencias encontradas"""
+        if not self.text_widget:
+            return
+
+        # Eliminar resaltados anteriores
+        self.text_widget.tag_remove("search", "1.0", tk.END)
+        self.text_widget.tag_remove("current_match", "1.0", tk.END)
+
+        # Configurar etiquetas para resaltado
+        self.text_widget.tag_configure("search", background="#FFFF00", foreground="#000000")
+        self.text_widget.tag_configure("current_match", background="#FF9900", foreground="#000000")
+
+        # Resaltar todas las coincidencias
+        for start_pos, end_pos in matches:
+            self.text_widget.tag_add("search", start_pos, end_pos)
+
+    def highlight_current_match(self):
+        """Resaltar la coincidencia actual"""
+        if not self.search_matches or self.current_match_index < 0:
+            return
+
+        # Obtener la posición de la coincidencia actual
+        start_pos, end_pos = self.search_matches[self.current_match_index]
+
+        # Resaltar la coincidencia actual
+        self.text_widget.tag_remove("current_match", "1.0", tk.END)
+        self.text_widget.tag_add("current_match", start_pos, end_pos)
+
+        # Desplazarse hasta la coincidencia
+        self.text_widget.see(start_pos)
+
+        # Actualizar la etiqueta de resultados
+        self.update_results_label()
+
+    def update_results_label(self):
+        """Actualizar la etiqueta que muestra el número de resultados"""
+        if not self.search_results_label:
+            return
+
+        if not self.search_matches:
+            self.search_results_label.configure(text="No hay coincidencias")
+        else:
+            self.search_results_label.configure(
+                text=f"{self.current_match_index + 1} de {len(self.search_matches)}"
+            )
+
+    def search_text(self, event=None):
+        """Buscar el texto en el contenido"""
+        if not self.search_entry or not self.text_widget:
+            return
+
+        search_term = self.search_entry.get()
+        if not search_term:
+            self.search_matches = []
+            self.current_match_index = -1
+            self.update_results_label()
+            return
+
+        # Encontrar todas las coincidencias
+        self.search_matches = self.find_all_matches(search_term)
+
+        # Resaltar todas las coincidencias
+        self.highlight_matches(self.search_matches)
+
+        # Establecer la coincidencia actual
+        if self.search_matches:
+            self.current_match_index = 0
+            self.highlight_current_match()
+        else:
+            self.current_match_index = -1
+            self.update_results_label()
+
+    def search_next(self, event=None):
+        """Buscar la siguiente coincidencia"""
+        if not self.search_entry or not self.text_widget:
+            return
+
+        # Si es la primera búsqueda o se cambió el término, buscar desde el principio
+        current_search_term = self.search_entry.get()
+        if not self.search_matches or current_search_term != self.search_entry.get():
+            self.search_text()
+            return
+
+        # Si no hay coincidencias, no hacer nada
+        if not self.search_matches:
+            return
+
+        # Avanzar al siguiente resultado
+        self.current_match_index = (self.current_match_index + 1) % len(self.search_matches)
+        self.highlight_current_match()
+
+    def search_previous(self, event=None):
+        """Buscar la coincidencia anterior"""
+        if not self.search_entry or not self.text_widget:
+            return
+
+        # Si es la primera búsqueda o se cambió el término, buscar desde el principio
+        current_search_term = self.search_entry.get()
+        if not self.search_matches or current_search_term != self.search_entry.get():
+            self.search_text()
+            return
+
+        # Si no hay coincidencias, no hacer nada
+        if not self.search_matches:
+            return
+
+        # Retroceder al resultado anterior
+        self.current_match_index = (self.current_match_index - 1) % len(self.search_matches)
+        self.highlight_current_match()
 
     def start_mainloop(self):
         """Iniciar el bucle principal de Tkinter"""

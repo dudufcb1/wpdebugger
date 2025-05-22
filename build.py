@@ -7,8 +7,8 @@ def build_executable():
     print("Iniciando compilación del ejecutable...")
 
     # Verificar que estamos en el directorio correcto
-    if not os.path.exists('wpdebugger_simple.py'):
-        print("Error: No se encontró el archivo wpdebugger_simple.py")
+    if not os.path.exists('src/main_modern.py'):
+        print("Error: No se encontró el archivo src/main_modern.py")
         print("Asegúrate de ejecutar este script desde el directorio raíz del proyecto")
         return False
 
@@ -54,7 +54,7 @@ def build_executable():
         pyinstaller_options.append(f'--add-data={data}')
 
     # Añadir el script principal
-    pyinstaller_options.append('wpdebugger_simple.py')
+    pyinstaller_options.append('src/main_modern.py')
 
     # Eliminar opciones vacías
     pyinstaller_options = [opt for opt in pyinstaller_options if opt]

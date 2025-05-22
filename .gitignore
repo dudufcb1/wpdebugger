@@ -149,3 +149,4 @@ build/*
 
 # UV specific
 .uv/
+WPDebugViewer.exe
